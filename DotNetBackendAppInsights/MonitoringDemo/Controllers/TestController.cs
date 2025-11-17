@@ -309,6 +309,200 @@ namespace MonitoringDemo.Controllers
             }
         }
         
+        [HttpGet("runall")]
+        public async Task<IActionResult> RunAllTests()
+        {
+            var overallStopwatch = Stopwatch.StartNew();
+            var results = new List<object>();
+            var failures = new List<string>();
+            
+            try
+            {
+                _logger.LogInformation("Running all tests");
+                
+                // 1. Latency Test (100ms delay)
+                try
+                {
+                    var latencyStopwatch = Stopwatch.StartNew();
+                    await Task.Delay(150);
+                    latencyStopwatch.Stop();
+                    
+                    results.Add(new
+                    {
+                        test = "Latency Test",
+                        status = "Success",
+                        duration = latencyStopwatch.ElapsedMilliseconds,
+                        details = "Tested with 100ms delay"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("Latency Test");
+                    results.Add(new { test = "Latency Test", status = "Failed", error = ex.Message });
+                }
+                
+                // 2. CPU Test (intensity 3)
+                try
+                {
+                    var cpuStopwatch = Stopwatch.StartNew();
+                    var iterations = 3 * 100000;
+                    double result = 0;
+                    
+                    for (int i = 0; i < iterations; i++)
+                    {
+                        result += Math.Sqrt(i) * Math.Sin(i) * Math.Cos(i);
+                    }
+                    
+                    cpuStopwatch.Stop();
+                    
+                    results.Add(new
+                    {
+                        test = "CPU Test",
+                        status = "Success",
+                        duration = cpuStopwatch.ElapsedMilliseconds,
+                        details = $"Completed {iterations} iterations"
+                    });
+                    
+                    _telemetryClient.TrackMetric("CpuTestIntensity", 3);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("CPU Test");
+                    results.Add(new { test = "CPU Test", status = "Failed", error = ex.Message });
+                }
+                
+                // 3. Exception Test (controlled)
+                try
+                {
+                    var exceptionStopwatch = Stopwatch.StartNew();
+                    
+                    try
+                    {
+                        throw new InvalidOperationException("Controlled test exception");
+                    }
+                    catch (InvalidOperationException testEx)
+                    {
+                        _telemetryClient.TrackException(testEx, new Dictionary<string, string>
+                        {
+                            { "TestType", "RunAllTests" },
+                            { "ExceptionCategory", "controlled" }
+                        });
+                        
+                        exceptionStopwatch.Stop();
+                        
+                        results.Add(new
+                        {
+                            test = "Exception Test",
+                            status = "Success",
+                            duration = exceptionStopwatch.ElapsedMilliseconds,
+                            details = "Exception properly handled and logged"
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("Exception Test");
+                    results.Add(new { test = "Exception Test", status = "Failed", error = ex.Message });
+                }
+                
+                // 4. Dependency Test
+                try
+                {
+                    var depStopwatch = Stopwatch.StartNew();
+                    var result = await _externalApiService.CallExternalApiAsync("get");
+                    depStopwatch.Stop();
+                    
+                    results.Add(new
+                    {
+                        test = "Dependency Test",
+                        status = "Success",
+                        duration = depStopwatch.ElapsedMilliseconds,
+                        details = $"External API call successful ({result.Length} chars)"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("Dependency Test");
+                    results.Add(new { test = "Dependency Test", status = "Failed", error = ex.Message });
+                    
+                    _telemetryClient.TrackException(ex, new Dictionary<string, string>
+                    {
+                        { "TestType", "RunAllTests" },
+                        { "TestName", "DependencyTest" }
+                    });
+                }
+                
+                // 5. Database Test
+                try
+                {
+                    var dbStopwatch = Stopwatch.StartNew();
+                    var entities = await _databaseService.GetAllEntitiesAsync();
+                    var count = await _databaseService.GetEntityCountAsync();
+                    dbStopwatch.Stop();
+                    
+                    results.Add(new
+                    {
+                        test = "Database Test",
+                        status = "Success",
+                        duration = dbStopwatch.ElapsedMilliseconds,
+                        details = $"Retrieved {count} entities successfully"
+                    });
+                    
+                    _telemetryClient.TrackDependency("Database", "GetAll", 
+                        Guid.NewGuid().ToString(), DateTime.UtcNow.Subtract(dbStopwatch.Elapsed), dbStopwatch.Elapsed, true);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add("Database Test");
+                    results.Add(new { test = "Database Test", status = "Failed", error = ex.Message });
+                    
+                    _telemetryClient.TrackException(ex, new Dictionary<string, string>
+                    {
+                        { "TestType", "RunAllTests" },
+                        { "TestName", "DatabaseTest" }
+                    });
+                }
+                
+                overallStopwatch.Stop();
+                
+                var response = new
+                {
+                    message = "All tests completed",
+                    totalTests = 5,
+                    successfulTests = 5 - failures.Count,
+                    failedTests = failures.Count,
+                    failures = failures,
+                    results = results,
+                    totalDuration = overallStopwatch.ElapsedMilliseconds,
+                    timestamp = DateTime.UtcNow
+                };
+                
+                _telemetryClient.TrackEvent("RunAllTestsCompleted", new Dictionary<string, string>
+                {
+                    { "TotalTests", "5" },
+                    { "SuccessfulTests", (5 - failures.Count).ToString() },
+                    { "FailedTests", failures.Count.ToString() }
+                });
+                
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                overallStopwatch.Stop();
+                _logger.LogError(ex, "Run all tests failed");
+                _telemetryClient.TrackException(ex);
+                
+                return StatusCode(500, new
+                {
+                    error = "Run all tests failed",
+                    message = ex.Message,
+                    partialResults = results,
+                    totalDuration = overallStopwatch.ElapsedMilliseconds,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+        }
+        
         [HttpGet("health")]
         public async Task<IActionResult> HealthCheck()
         {

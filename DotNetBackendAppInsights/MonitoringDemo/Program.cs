@@ -77,6 +77,9 @@ app.UseCors();
 
 app.UseHttpsRedirection();
 
+// Explicitly disable static files to prevent interference
+// app.UseStaticFiles(); // Commented out to prevent static file serving
+
 app.UseAuthorization();
 
 // Map controllers
