@@ -1,9 +1,10 @@
 # Java Microservices AKS Demo
 
-[![CI/CD Pipeline](https://github.com/Saby007/java-microservices-aks-demo/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Saby007/java-microservices-aks-demo/actions/workflows/ci-cd.yml)
-[![Security Scanning](https://github.com/Saby007/java-microservices-aks-demo/actions/workflows/security.yml/badge.svg)](https://github.com/Saby007/java-microservices-aks-demo/actions/workflows/security.yml)
+[![CI/CD Pipeline](https://github.com/ssamadda_microsoft/SfMC_Projects/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/ssamadda_microsoft/SfMC_Projects/actions/workflows/ci-cd.yml)
 
 A comprehensive demonstration of Java microservices with GitHub Actions CI/CD, advanced security scanning, and blue-green deployment to Azure Kubernetes Service (AKS).
+
+> **Repository**: This demo is part of the SfMC_Projects repository at [https://github.com/ssamadda_microsoft/SfMC_Projects](https://github.com/ssamadda_microsoft/SfMC_Projects) in the `JavaMicroservicesDemo/` folder.
 
 ## 🏗️ **Architecture Overview**
 
