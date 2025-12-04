@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pydantic
+agent-framework
+azure-identity
+python-dotenv
+aiohttp
