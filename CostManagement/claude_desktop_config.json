@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "azure-cost-management": {
+      "command": "python",
+      "args": ["-m", "azure_cost_mcp"],
+      "env": {
+        "AZURE_SUBSCRIPTION_ID": "616dc9b8-b4aa-415f-8dcb-71bc462916c5",
+        "AZURE_COST_MCP_LOG_LEVEL": "WARNING"
+      }
+    }
+  }
+}
