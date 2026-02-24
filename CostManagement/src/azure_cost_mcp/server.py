@@ -6,6 +6,7 @@ via the Model Context Protocol.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import sys
@@ -51,8 +52,14 @@ logger = logging.getLogger(__name__)
 
 # ── MCP Server ───────────────────────────────────────────────────────
 
+# Host/port are configurable via env vars for containerised deployment
+_host = os.environ.get("MCP_HOST", "0.0.0.0")
+_port = int(os.environ.get("MCP_PORT", "8000"))
+
 mcp = FastMCP(
     "azure-cost-management",
+    host=_host,
+    port=_port,
     instructions=(
         "Azure Cost Management MCP Server — query costs, forecasts, budgets, "
         "alerts, optimization recommendations, anomalies, and personalised "
@@ -546,9 +553,34 @@ async def generate_azure_updates_report_tool(
 
 
 def main() -> None:
-    """Start the Azure Cost Management MCP server."""
-    logger.info("Starting Azure Cost Management MCP Server v0.1.0")
-    mcp.run()
+    """Start the Azure Cost Management MCP server.
+
+    Supports two transport modes:
+      - stdio (default): For local MCP clients (Claude Desktop, VS Code, etc.)
+      - streamable-http: For remote access over HTTP at /mcp endpoint
+
+    Usage:
+      azure-cost-mcp                          # stdio mode
+      azure-cost-mcp --transport streamable-http   # HTTP mode on 0.0.0.0:8000
+    """
+    parser = argparse.ArgumentParser(
+        description="Azure Cost Management MCP Server",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http"],
+        default=os.environ.get("MCP_TRANSPORT", "stdio"),
+        help="Transport mode: stdio (local) or streamable-http (remote). "
+             "Can also be set via MCP_TRANSPORT env var. Default: stdio",
+    )
+    args = parser.parse_args()
+
+    logger.info(
+        "Starting Azure Cost Management MCP Server v0.1.0 "
+        "(transport=%s, host=%s, port=%d)",
+        args.transport, _host, _port,
+    )
+    mcp.run(transport=args.transport)
 
 
 if __name__ == "__main__":
