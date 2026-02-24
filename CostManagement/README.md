@@ -305,13 +305,13 @@ src/azure_cost_mcp/
 
 | API | Docs |
 |-----|------|
-| Cost Management Query | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/cost-management/query/usage) |
-| Cost Management Forecast | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/cost-management/forecast/usage) |
-| Cost Management Budgets | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/cost-management/budgets) |
-| Cost Management Alerts | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/cost-management/alerts) |
-| Azure Advisor | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/advisor/recommendations) |
-| Azure Resource Graph | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/azureresourcegraph/resources) |
-| Azure Updates RSS | [learn.microsoft.com](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-services-resource-providers) |
+| Cost Management Query | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/cost-management/query/usage) |
+| Cost Management Forecast | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/cost-management/forecast/usage) |
+| Cost Management Budgets | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/cost-management/budgets) |
+| Cost Management Alerts | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/cost-management/alerts) |
+| Azure Advisor | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/advisor/recommendations) |
+| Azure Resource Graph | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/azureresourcegraph/resources) |
+| Azure Updates RSS | [Microsoft Update Feed](https://www.microsoft.com/releasecommunications/api/v2/azure/rss) |
 
 ## Comparison with AWS MCP Server
 
