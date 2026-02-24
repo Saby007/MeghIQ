@@ -312,18 +312,3 @@ src/azure_cost_mcp/
 | Azure Advisor | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/advisor/recommendations) |
 | Azure Resource Graph | [Microsoft Learn](https://learn.microsoft.com/en-us/rest/api/azureresourcegraph/resources) |
 | Azure Updates RSS | [Microsoft Update Feed](https://www.microsoft.com/releasecommunications/api/v2/azure/rss) |
-
-## Comparison with AWS MCP Server
-
-| Feature | AWS MCP | This Server |
-|---------|---------|-------------|
-| Cost queries | Cost Explorer API | Cost Management Query API |
-| Forecasts | Cost Explorer | Cost Management Forecast API |
-| Budgets | AWS Budgets | Cost Management Budgets API |
-| Anomaly detection | Cost Anomaly Detection | Native API + heuristic fallback |
-| Personalised updates | — | Azure Updates Intelligence (RSS + Resource Graph) |
-| PDF reports | — | Colour-coded PDF with executive summary |
-| Remote access | — | Streamable HTTP transport |
-| Recommendations | Cost Optimization Hub, Compute Optimizer | Azure Advisor (Cost category) |
-| Storage analysis | S3 Storage Lens | *(not yet — planned)* |
-| Output format | Natural language | Structured JSON |
