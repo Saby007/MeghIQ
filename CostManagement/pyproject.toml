@@ -7,7 +7,6 @@ name = "azure-cost-management-mcp-server"
 version = "0.1.0"
 description = "Azure Cost Management MCP Server - query costs, forecasts, budgets, alerts, recommendations, and anomalies via MCP"
 readme = "README.md"
-license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [
     { name = "SfMC Adobe Team" }
@@ -16,7 +15,6 @@ keywords = ["azure", "cost-management", "mcp", "finops"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
