@@ -311,7 +311,7 @@ src/azure_cost_mcp/
 | Cost Management Alerts | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/cost-management/alerts) |
 | Azure Advisor | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/advisor/recommendations) |
 | Azure Resource Graph | [learn.microsoft.com](https://learn.microsoft.com/en-us/rest/api/azureresourcegraph/resources) |
-| Azure Updates RSS | [microsoft.com](https://www.microsoft.com/releasecommunications/api/v2/azure/rss) |
+| Azure Updates RSS | [learn.microsoft.com](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-services-resource-providers) |
 
 ## Comparison with AWS MCP Server
 
