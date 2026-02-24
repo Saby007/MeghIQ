@@ -32,6 +32,12 @@ from azure_cost_mcp.tools.recommendations import (
     list_cost_recommendations,
 )
 from azure_cost_mcp.tools.anomalies import list_anomalies
+from azure_cost_mcp.tools.azure_updates import (
+    get_azure_update_details,
+    list_all_azure_updates,
+)
+from azure_cost_mcp.tools.update_intelligence import get_personalized_updates
+from azure_cost_mcp.tools.pdf_report import generate_report
 
 # ── Logging ──────────────────────────────────────────────────────────
 
@@ -49,8 +55,9 @@ mcp = FastMCP(
     "azure-cost-management",
     instructions=(
         "Azure Cost Management MCP Server — query costs, forecasts, budgets, "
-        "alerts, optimization recommendations, and anomalies across your Azure "
-        "subscriptions. All tools return structured JSON."
+        "alerts, optimization recommendations, anomalies, and personalised "
+        "Azure Updates Intelligence across your Azure subscriptions. "
+        "All tools return structured JSON."
     ),
 )
 
@@ -441,6 +448,97 @@ async def list_anomalies_tool(
     return await list_anomalies(
         subscription_id=subscription_id or None,
         days_back=days_back,
+    )
+
+
+# ── Register Azure Updates Intelligence Tools ───────────────────────
+
+
+@mcp.tool()
+async def get_personalized_azure_updates_tool(
+    subscription_id: str = "",
+    max_per_section: int = 10,
+) -> str:
+    """Get a personalised Azure Updates digest based on your deployed resources.
+
+    Discovers all resource types in the subscription via Azure Resource Graph,
+    fetches the Azure Updates RSS feed, scores each update for relevance to
+    your environment, and returns a categorised digest ordered by urgency.
+
+    Sections include retirements, security, pricing, new features, previews,
+    and regional expansion — all derived dynamically from the feed's own taxonomy.
+
+    Args:
+        subscription_id: Azure subscription ID. Leave empty to use AZURE_SUBSCRIPTION_ID env var.
+        max_per_section: Maximum updates per section (default 10).
+    """
+    return await get_personalized_updates(
+        subscription_id=subscription_id or None,
+        max_per_section=max_per_section,
+    )
+
+
+@mcp.tool()
+async def list_all_azure_updates_tool(
+    category: str = "",
+    status: str = "",
+    search: str = "",
+    max_results: int = 50,
+) -> str:
+    """List all Azure Updates from the official RSS feed (unfiltered by environment).
+
+    Useful for browsing all updates, or filtering by category/status/keyword.
+
+    Args:
+        category: Optional category filter (e.g. 'Virtual Machines', 'Security').
+        status: Optional status filter (e.g. 'Launched', 'In preview', 'Retired').
+        search: Optional keyword search across title and description.
+        max_results: Maximum number of updates to return (default 50).
+    """
+    return await list_all_azure_updates(
+        category=category or None,
+        status=status or None,
+        search=search or None,
+        max_results=max_results,
+    )
+
+
+@mcp.tool()
+async def get_azure_update_details_tool(
+    update_id: str,
+) -> str:
+    """Get full details of a specific Azure Update by its ID (GUID from the feed).
+
+    Args:
+        update_id: The unique GUID identifier of the update.
+    """
+    return await get_azure_update_details(update_id=update_id)
+
+
+@mcp.tool()
+async def generate_azure_updates_report_tool(
+    subscription_id: str = "",
+    report_type: str = "full",
+    max_per_section: int = 10,
+    output_path: str = "",
+) -> str:
+    """Generate a professional PDF report of Azure Updates personalised to your environment.
+
+    Creates a colour-coded PDF with cover page, executive summary, and
+    per-section detail pages showing relevant updates, affected resources,
+    and action items.
+
+    Args:
+        subscription_id: Azure subscription ID. Leave empty to use AZURE_SUBSCRIPTION_ID env var.
+        report_type: 'full' (detailed per-update) or 'executive' (summary only).
+        max_per_section: Maximum updates per section (default 10).
+        output_path: File path to save the PDF. Leave empty for auto-generated temp path.
+    """
+    return await generate_report(
+        subscription_id=subscription_id or None,
+        report_type=report_type,
+        max_per_section=max_per_section,
+        output_path=output_path or None,
     )
 
 
