@@ -201,7 +201,3 @@ src/azure_cost_mcp/
 | Recommendations | Cost Optimization Hub, Compute Optimizer | Azure Advisor (Cost category) |
 | Storage analysis | S3 Storage Lens | *(not yet — planned)* |
 | Output format | Natural language | Structured JSON |
-
-## License
-
-MIT
