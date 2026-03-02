@@ -1,0 +1,6 @@
+mcp[http]>=1.1.0
+openai>=1.30.0
+azure-identity>=1.15.0
+pyodbc>=5.1.0
+uvicorn>=0.30.0
+python-dotenv>=1.0.0
