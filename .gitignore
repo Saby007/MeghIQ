@@ -92,3 +92,7 @@ bandit-report.json
 # Local logs
 *.log
 logs/
+
+# ── Large binary blobs (not source) ──────────────────────────────────
+*.pptx
+*.zip

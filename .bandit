@@ -1,0 +1,9 @@
+[bandit]
+# Bandit configuration consumed by pre-commit (.pre-commit-config.yaml)
+# and intended to mirror the CI invocation in
+# .github/workflows/mcp-server-ci.yml.
+#
+# Excludes:
+#   - tests/   : pytest asserts and mock URLs are noisy false positives.
+#   - .venv/   : third-party site-packages, never our code.
+exclude_dirs = ["tests", ".venv"]

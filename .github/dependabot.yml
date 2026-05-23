@@ -1,0 +1,109 @@
+# Dependabot configuration for MeghIQ.
+#
+# What this does:
+# - Watches each ecosystem we use (pip for the MCP server, npm for the
+#   Angular chat UI, github-actions for the CI workflow itself).
+# - Opens an automated pull request whenever a pinned dependency has a
+#   newer release. CI then runs the unit + integration + bandit + pip-audit
+#   gates against the proposed bump, so we get evidence the update is safe
+#   before merging.
+# - Groups patch and minor bumps so we get one PR per week per ecosystem,
+#   not one PR per package. Major bumps stay separate (they often need
+#   manual work).
+# - Always allows direct dependencies. Indirect (transitive) deps are
+#   handled via pip-audit / npm-audit which run in CI.
+version: 2
+updates:
+  # ── Python: MeghIQ MCP Server ──────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /mcp-server
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    commit-message:
+      prefix: "deps(mcp-server)"
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+    ignore:
+      # Major version of mcp / pydantic typically requires manual API review.
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]
+      - dependency-name: pydantic
+        update-types: ["version-update:semver-major"]
+
+  # ── Python: Agent backend (LangGraph / Foundry orchestrator) ───────
+  - package-ecosystem: pip
+    directory: /agent-backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    commit-message:
+      prefix: "deps(agent-backend)"
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+
+  # ── npm: Angular chat UI ───────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /chat-ui
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    commit-message:
+      prefix: "deps(chat-ui)"
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+    ignore:
+      # Angular major bumps require ``ng update`` and migration scripts;
+      # leave them as individual PRs so the migration is intentional.
+      - dependency-name: "@angular/*"
+        update-types: ["version-update:semver-major"]
+
+  # ── GitHub Actions (keep the CI workflow's own actions current) ────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor

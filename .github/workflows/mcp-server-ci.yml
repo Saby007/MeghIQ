@@ -1,0 +1,107 @@
+name: MCP server CI
+
+# Runs on every push and pull-request that touches the mcp-server tree.
+# Validates:
+#   1. All Python files parse cleanly (py_compile).
+#   2. The FastMCP server imports and registers all expected tools.
+#   3. The unit-test suite (test_http_utils.py, test_telemetry.py,
+#      test_validators.py) passes with the exact pinned dependency
+#      versions from requirements.txt.
+#   4. The server integration suite (test_server_integration.py)
+#      spawns the real server and exercises /health, /metrics, and the
+#      MCP JSON-RPC handshake.
+#   5. Static security scan (bandit) and dependency CVE scan
+#      (pip-audit) gate the build.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "mcp-server/**"
+      - ".github/workflows/mcp-server-ci.yml"
+  pull_request:
+    paths:
+      - "mcp-server/**"
+      - ".github/workflows/mcp-server-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint + unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+    defaults:
+      run:
+        working-directory: mcp-server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: mcp-server/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pip-audit bandit
+
+      - name: py_compile every Python source
+        run: |
+          # Fail loudly if any file has a syntax error before importing it.
+          python -m py_compile $(git ls-files '*.py')
+
+      - name: Verify server imports and registers tools
+        env:
+          # Defensive defaults so import-time env reads do not blow up.
+          MEGHIQ_LOG_LEVEL: WARNING
+          MCP_HOST: 127.0.0.1
+          MCP_SERVER_PORT: "8000"
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, ".")
+          import server
+          tools = list(server.mcp._tool_manager._tools.keys())
+          print(f"Registered {len(tools)} tools")
+          assert len(tools) >= 23, f"Expected >= 23 tools, got {len(tools)}"
+          # Spot-check that Pydantic Field metadata flowed into the schema.
+          first = server.mcp._tool_manager._tools[tools[0]]
+          props = first.parameters.get("properties", {})
+          assert props, "First tool has no schema properties"
+          PY
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/test_http_utils.py tests/test_telemetry.py tests/test_validators.py -v
+
+      - name: Run server integration tests (no Azure creds needed)
+        # Spawns the FastMCP server on an ephemeral port, exercises the
+        # /health and /metrics endpoints, runs the full MCP handshake,
+        # and calls the only Azure-credential-free tool (RSS feed).
+        run: |
+          python -m pytest tests/test_server_integration.py -v
+
+      - name: Static security scan (bandit)
+        # Fails the build only on HIGH-severity findings; MEDIUM / LOW
+        # issues are surfaced in the log for review but do not break CI.
+        # Test files are excluded (asserts and mock URLs would noise the
+        # report). Intentional findings (e.g. binding 0.0.0.0 inside a
+        # container) are annotated with ``# nosec`` at the call site.
+        run: |
+          bandit -r . -x ./tests,./.venv --severity-level high -f txt
+
+      - name: Dependency vulnerability scan (pip-audit)
+        # Fails the build on any known CVE in a pinned dependency. The
+        # ``--strict`` flag also fails on dependency-resolution errors.
+        run: |
+          pip-audit --strict -r requirements.txt

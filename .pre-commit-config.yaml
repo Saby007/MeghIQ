@@ -1,0 +1,68 @@
+# Pre-commit hook configuration.
+#
+# Install once:
+#     pip install pre-commit
+#     pre-commit install
+#
+# After that every ``git commit`` runs the hooks below against the staged
+# files. The same checks also run in CI (.github/workflows/mcp-server-ci.yml)
+# so the local hook is purely an early-warning system — CI is the source
+# of truth.
+#
+# What runs:
+#   * ruff       — fast Python lint + format check (replaces flake8/black).
+#   * bandit     — static security scan on mcp-server (HIGH severity only,
+#                  matching CI).
+#   * pip-audit  — CVE scan against the pinned requirements.txt.
+#   * Built-in   — trailing whitespace, EOL fixer, large-file guard,
+#                  merge-conflict marker check, YAML/JSON syntax check.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.5
+    hooks:
+      - id: ruff
+        # Run lint on the Python sources we own. Auto-fix safe issues so
+        # the commit still proceeds when the fix is trivial.
+        args: ["--fix", "--exit-non-zero-on-fix"]
+        files: ^(mcp-server|agent-backend)/.*\.py$
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        name: bandit (mcp-server, HIGH severity)
+        # Match CI: only fail on HIGH severity. ``# nosec`` annotations
+        # in source code are honoured.
+        args:
+          - --severity-level
+          - high
+          - -c
+          - .bandit
+        files: ^mcp-server/.*\.py$
+        exclude: ^mcp-server/tests/
+
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.9.0
+    hooks:
+      - id: pip-audit
+        name: pip-audit (mcp-server/requirements.txt)
+        args: ["--strict", "-r", "mcp-server/requirements.txt"]
+        # pip-audit needs network. Pre-commit's CI mode pins this off,
+        # which is fine — CI also runs pip-audit separately.
+        pass_filenames: false
