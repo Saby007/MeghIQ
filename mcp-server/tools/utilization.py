@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -104,21 +105,117 @@ def _auto_interval(window: timedelta) -> str:
     return "PT12H"
 
 
-async def _discover_resource_type(
+async def _resolve_via_cost_management(
     service_name: str,
     subscription_id: str,
     token: str,
 ) -> str | None:
-    """Dynamically resolve a service name to an ARM resource type using Resource Graph.
+    """Resolve a friendly service name to an ARM resource type via Cost Management.
 
-    Queries for resources whose type contains the service name keywords,
-    then returns the most common resource type found.
+    The Cost Management ServiceName dimension uses the same human-friendly
+    names a FinOps user sees in Cost Analysis (e.g. "Logic Apps",
+    "Virtual Machines", "Azure App Service"). Grouping by ResourceType
+    gives the ARM type Azure itself attributes to that service — no
+    hardcoded mappings required.
     """
-    # Validate inputs before interpolating into KQL to prevent injection.
+    payload: dict[str, Any] = {
+        "type": "ActualCost",
+        "timeframe": "MonthToDate",
+        "dataset": {
+            "granularity": "None",
+            "aggregation": {
+                "totalCost": {"name": "Cost", "function": "Sum"},
+            },
+            "grouping": [
+                {"type": "Dimension", "name": "ServiceName"},
+                {"type": "Dimension", "name": "ResourceType"},
+            ],
+        },
+    }
+    url = (
+        f"{BASE_URL}/subscriptions/{subscription_id}"
+        "/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("Cost Management discovery error: %s", exc)
+        return None
+
+    if resp.status_code != 200:
+        logger.info(
+            "Cost Management discovery returned %d (falling back)",
+            resp.status_code,
+        )
+        return None
+
+    body = resp.json()
+    props = body.get("properties", body)
+    columns = [c["name"] for c in props.get("columns", [])]
+    rows = props.get("rows", [])
+    if not rows or "ServiceName" not in columns or "ResourceType" not in columns:
+        return None
+
+    sn_idx = columns.index("ServiceName")
+    rt_idx = columns.index("ResourceType")
+    cost_idx = columns.index("Cost") if "Cost" in columns else None
+
+    needle = service_name.strip().lower()
+    needle_tokens = {t for t in re.split(r"[\s/.\-_]+", needle) if t}
+
+    # Score every row by how well its ServiceName matches the user input.
+    # 3 = exact match, 2 = either side fully contained, 1 = token overlap.
+    best_score = 0
+    best_cost = -1.0
+    best_type: str | None = None
+    for row in rows:
+        service = (row[sn_idx] or "").strip()
+        rtype = (row[rt_idx] or "").strip()
+        if not service or not rtype:
+            continue
+
+        service_l = service.lower()
+        if service_l == needle:
+            score = 3
+        elif needle in service_l or service_l in needle:
+            score = 2
+        else:
+            service_tokens = {
+                t for t in re.split(r"[\s/.\-_]+", service_l) if t
+            }
+            score = 1 if needle_tokens & service_tokens else 0
+
+        if score == 0:
+            continue
+
+        cost = float(row[cost_idx]) if cost_idx is not None else 0.0
+        if score > best_score or (score == best_score and cost > best_cost):
+            best_score = score
+            best_cost = cost
+            best_type = rtype.lower()
+
+    return best_type
+
+
+async def _resolve_via_resource_graph(
+    service_name: str,
+    subscription_id: str,
+    token: str,
+) -> str | None:
+    """Fallback: substring search in Resource Graph for resources whose
+    type or name contains the service name keywords."""
     safe_sub_id = validate_subscription_id(subscription_id)
     safe_search = sanitize_kql_input(service_name.lower())
 
-    # Try an exact-ish type match first, then fall back to broader search
     query = f"""
     Resources
     | where subscriptionId == '{safe_sub_id}'
@@ -153,8 +250,6 @@ async def _discover_resource_type(
         return None
 
     data = resp.json().get("data", [])
-
-    # Handle table format or objectArray format
     if isinstance(data, dict):
         rows = data.get("rows", [])
         columns = [c["name"] for c in data.get("columns", [])]
@@ -167,6 +262,41 @@ async def _discover_resource_type(
     if records:
         return records[0].get("type", "").lower()
     return None
+
+
+async def _discover_resource_type(
+    service_name: str,
+    subscription_id: str,
+    token: str,
+) -> str | None:
+    """Dynamically resolve a service name to an ARM resource type.
+
+    Tries Cost Management first (uses Azure's own ServiceName → ResourceType
+    taxonomy, the same vocabulary FinOps users see in Cost Analysis), then
+    falls back to a Resource Graph substring search for zero-cost or
+    just-created resources.
+    """
+    cost_result = await _resolve_via_cost_management(
+        service_name, subscription_id, token
+    )
+    if cost_result:
+        logger.info(
+            "Resolved service '%s' to '%s' via Cost Management",
+            service_name,
+            cost_result,
+        )
+        return cost_result
+
+    rg_result = await _resolve_via_resource_graph(
+        service_name, subscription_id, token
+    )
+    if rg_result:
+        logger.info(
+            "Resolved service '%s' to '%s' via Resource Graph fallback",
+            service_name,
+            rg_result,
+        )
+    return rg_result
 
 
 async def _discover_metric_names(
@@ -365,9 +495,18 @@ async def get_service_utilization(
                 f"check that resources of this type are deployed."
             )
 
-        # Sanitize the resource type before re-interpolating into a new KQL
-        # query (it came from a prior Resource Graph result, but defence in depth).
-        safe_resource_type = sanitize_kql_input(resource_type)
+        # Defence in depth: the discovered resource type came from a trusted
+        # Resource Graph response and is always lowercase. Enforce the canonical
+        # Azure resource-type shape ("namespace/type", optionally with further
+        # "/child" segments) so we can safely re-interpolate it into KQL. We
+        # can't use sanitize_kql_input here because real resource types contain
+        # '/', which that helper deliberately rejects.
+        if not re.fullmatch(r"[a-z0-9.]+(/[a-z0-9.]+){1,3}", resource_type):
+            return error_response(
+                f"Discovered resource type has unexpected format: {resource_type}",
+                code="500",
+            )
+        safe_resource_type = resource_type
 
         # Step 2: Query Resource Graph for resources of this type
         query = f"""
@@ -616,6 +755,9 @@ async def _query_single_namespace(
 
     # 3. Fallback: if the parent URI returned no real data for a sub-namespace,
     # retry against the conventional child URI (<parent>/<child>/default).
+    # When querying the child URI we deliberately drop ``metricnamespace`` —
+    # Azure Monitor infers the namespace from the URI and otherwise rejects
+    # the child namespace as invalid for the parent resource type.
     if metric_namespace and not _has_real_data(ns_metrics):
         child_uri = _child_resource_uri_for_namespace(resource_id, metric_namespace)
         if child_uri:
@@ -628,12 +770,17 @@ async def _query_single_namespace(
                 resource_id=child_uri,
                 metric_names=names_for_ns,
                 subscription_id=subscription_id,
-                metric_namespace=metric_namespace,
+                metric_namespace=None,
                 start_time=start_dt,
                 end_time=end_dt,
                 interval=interval,
             )
-            if _has_real_data(retry_metrics):
+            # Prefer the child-URI result whenever it produced real data, or
+            # whenever the parent call surfaced an error (so callers see the
+            # most informative outcome rather than a stale namespace error).
+            if _has_real_data(retry_metrics) or (
+                "_error" in ns_metrics and "_error" not in retry_metrics
+            ):
                 ns_metrics = retry_metrics
                 used_resource_uri = child_uri
 

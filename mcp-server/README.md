@@ -19,11 +19,12 @@ Every tool argument is validated by a [Pydantic](https://docs.pydantic.dev/) `An
   - [Alert Tools](#alert-tools-2-tools)
   - [Recommendation Tools](#recommendation-tools-2-tools)
   - [Anomaly Detection Tools](#anomaly-detection-tools-1-tool)
-  - [Utilization Tools](#utilization-tools-1-tool)
+  - [Utilization Tools](#utilization-tools-2-tools)
   - [Azure Updates Intelligence Tools](#azure-updates-intelligence-tools-6-tools)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
 - [Running the Server](#running-the-server)
+- [Deploy to Azure App Service](#deploy-to-azure-app-service)
 - [Environment Variables](#environment-variables)
 - [API Endpoints](#api-endpoints)
 - [Response Format](#response-format)
@@ -183,15 +184,26 @@ mcp-server/
 - `subscription_id` — Azure subscription ID
 - `days_back` — Number of days to analyze (default 30)
 
-### Utilization Tools (1 tool)
+### Utilization Tools (2 tools)
 
 | Tool | Description |
 |------|-------------|
-| `get_service_utilization_tool` | Get utilization details of an Azure service. **Fully dynamic** — no hardcoded mappings. Discovers resource types via Azure Resource Graph, then queries available metrics from Azure Monitor's metric definitions API for each resource over the past 3 days. |
+| `get_service_utilization_tool` | Get utilization details of an Azure service from a friendly service name. **Fully dynamic** — no hardcoded mappings. Resolves the ARM resource type via a two-stage resolver: first asks **Cost Management** for `ServiceName → ResourceType` (using Azure's own billing taxonomy, the same vocabulary FinOps users see in Cost Analysis), then falls back to a Resource Graph substring search for zero-cost / brand-new resources. Lists matching resources via Resource Graph and discovers each one's metrics via Azure Monitor's metric definitions API. Supports a user-configurable time window (defaults to the last 3 days, hard cap 93 days), explicit Azure Monitor time grain, and optional metric namespace for child resources. |
+| `get_utilization_metrics_tool` | Fetch Azure Monitor metrics for a specific resource by ARM `resource_id`. Use when you already know the resource and need full control over window, grain, metric list, and namespace. Supports **child metric namespaces** (e.g. `Microsoft.Storage/storageAccounts/blobServices` for blob metrics); when a child namespace is supplied against a parent resource URI, the tool transparently retries against the canonical child URI (`…/blobServices/default`). Supports auto-enumeration of platform/custom namespaces when none is given. |
 
-**Parameters:**
-- `service_name` — Azure service to query (e.g. `"Storage"`, `"Virtual Machines"`, `"SQL"`, `"Cosmos DB"`, `"AKS"`)
-- `subscription_id` — Azure subscription ID
+**Parameters — `get_service_utilization_tool`:**
+- `service_name` — Azure service to query (e.g. `"Storage"`, `"Logic Apps"`, `"App Service"`, `"Virtual Machines"`, `"Container Registry"`)
+- `subscription_id` — Optional Azure subscription ID (defaults to `AZURE_SUBSCRIPTION_ID`)
+- `start_time` / `end_time` — Optional ISO-8601 UTC bounds; defaults to the last 3 days, hard cap 93 days
+- `interval` — Optional Azure Monitor time grain (`PT5M`, `PT15M`, `PT1H`, `PT6H`, `PT12H`, `P1D`); auto-picked from window when omitted
+- `metric_namespace` — Optional metric namespace, e.g. `"Microsoft.Storage/storageAccounts/blobServices"` for blob metrics
+
+**Parameters — `get_utilization_metrics_tool`:**
+- `resource_id` — Full ARM resource ID (required)
+- `metric_namespace` or `metric_namespaces` — Single or multiple namespaces to query
+- `metric_names` — Optional explicit metric list; when omitted and a namespace is set, returns all metrics in that namespace (capped at `max_metrics_per_namespace`, default 20)
+- `include_child_namespaces` / `include_custom_namespaces` — Enumerate Platform / Custom + Qos namespaces on the resource
+- `start_time` / `end_time` / `interval` — Same semantics as above
 
 ### Azure Updates Intelligence Tools (6 tools)
 
@@ -302,6 +314,55 @@ python server.py --transport stdio             # stdio mode (for local MCP clien
 The server starts on `http://localhost:8000` using the Streamable HTTP transport by default.
 
 **MCP endpoint:** `http://localhost:8000/mcp`
+
+---
+
+## Deploy to Azure App Service
+
+The server is built to run on a Linux Python 3.12 App Service plan with a system-assigned managed identity.
+
+```bash
+# 1. Resource group + Linux App Service Plan (P0V3 or higher recommended)
+RG=rg-meghiq-mcp
+LOCATION=centralindia
+APP=meghiq-mcp-$(openssl rand -hex 3)
+
+az group create -n $RG -l $LOCATION
+az appservice plan create -g $RG -n asp-meghiq-mcp --is-linux --sku P0V3
+
+# 2. Web App with Python 3.12
+az webapp create -g $RG -p asp-meghiq-mcp -n $APP --runtime "PYTHON:3.12"
+
+# 3. Configure startup, build, port, subscription
+az webapp config set -g $RG -n $APP --startup-file "bash startup.sh"
+az webapp config appsettings set -g $RG -n $APP --settings \
+    AZURE_SUBSCRIPTION_ID=<your-sub-id> \
+    SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+    WEBSITES_PORT=8000 \
+    MEGHIQ_LOG_LEVEL=INFO
+
+# 4. Enable managed identity and grant Azure RBAC
+az webapp identity assign -g $RG -n $APP
+PRINCIPAL=$(az webapp identity show -g $RG -n $APP --query principalId -o tsv)
+SCOPE=/subscriptions/<your-sub-id>
+az role assignment create --assignee $PRINCIPAL --role "Cost Management Reader" --scope $SCOPE
+az role assignment create --assignee $PRINCIPAL --role "Reader"                --scope $SCOPE
+az role assignment create --assignee $PRINCIPAL --role "Monitoring Reader"     --scope $SCOPE
+
+# 5. Zip & deploy (run from mcp-server/)
+zip -r ../meghiq-mcp.zip . -x "__pycache__/*" ".venv/*" ".pytest_cache/*" "tests/*" "*.pyc"
+az webapp deploy -g $RG -n $APP --src-path ../meghiq-mcp.zip --type zip
+```
+
+After deployment, the MCP endpoint is:
+
+```
+https://<APP>.azurewebsites.net/mcp
+```
+
+Health check: `GET https://<APP>.azurewebsites.net/health` → `{"status":"ok","service":"meghiq-mcp"}`
+
+> **Security note:** the `/mcp` endpoint is currently unauthenticated. If you deploy to a public URL, put App Service Easy Auth, API Management, or a similar gate in front of it before exposing it broadly \u2014 the managed identity backing the server has read access to your subscription's costs and resources.
 
 ---
 
