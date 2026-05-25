@@ -9,7 +9,7 @@
 #     pip freeze > requirements.lock
 # and copy the matching entries below.
 
-mcp[cli]==1.23.0
+mcp[cli]==1.27.1
 pydantic==2.13.4
 
 # Azure SDK
@@ -17,7 +17,7 @@ azure-identity==1.25.3
 azure-mgmt-costmanagement==4.0.1
 azure-mgmt-monitor==6.0.2
 azure-mgmt-resource==23.4.0
-azure-mgmt-resourcegraph==8.0.0
+azure-mgmt-resourcegraph==8.0.1
 
 # HTTP / runtime
 httpx==0.28.1
@@ -25,11 +25,11 @@ python-dotenv==1.2.2
 python-dateutil==2.9.0.post0
 
 # PDF report generation
-fpdf2==2.8.4
+fpdf2==2.8.7
 
 # Web transport (streamable-http)
-starlette==1.0.1
-uvicorn==0.34.0
+starlette==1.1.0
+uvicorn==0.48.0
 
 # XML hardening (XXE-safe parser)
 defusedxml==0.7.1
